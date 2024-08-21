@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# Predefined subjects and abbreviations
+# Predefined subjects and major sectors
 compulsory_subjects = ["Innovation, Entrepreneurship and Start-ups (IES)", "Know yourself (KY)", "Professional Ethics (PE)"]
 general_electives_1 = ["Bibliophiles (Bibl)", "Psychology in Business (PB-A)"]
 general_electives_2 = ["International Business (IB)", "Project Management (PM)", "E-Business (E.Bus)"]
@@ -30,68 +30,52 @@ additional_subjects = [
 if "profiles" not in st.session_state:
     st.session_state["profiles"] = {}
 
-def filter_and_blank_timetable_by_subjects(timetable, selected_subjects):
-    for index, row in timetable.iterrows():
-        for col in timetable.columns[1:]:  # Skip the first column (time slot)
+def generate_timetable(uploaded_file, student_id):
+    # Load the timetable file
+    timetable_df = pd.read_excel(uploaded_file, sheet_name="MBA 2023-25_3RD SEMESTER")
+    
+    # Get the profile of the student
+    profile = st.session_state["profiles"].get(student_id)
+    
+    if not profile:
+        st.error("Profile not found for this enrollment number.")
+        return None
+
+    selected_section = profile["section"]
+    selected_abbreviations = [
+        profile["elective_1"],
+        profile["elective_2"]
+    ]
+    
+    major_sector_subjects = major_sectors[profile["major_sector"]]
+    selected_abbreviations.extend(major_sector_subjects)
+    
+    selected_abbreviations.append(profile["additional_subject"])
+
+    # Filter the timetable for the selected section
+    filtered_timetable = timetable_df[timetable_df['Section'] == selected_section]
+
+    for index, row in filtered_timetable.iterrows():
+        for col in filtered_timetable.columns[1:]:
             cell_value = str(row[col]).strip()
-            # Remove content within brackets and extra spaces
+            # Remove content in brackets
             cell_value = re.sub(r'\[.*?\]', '', cell_value).strip()
-            cell_value = re.sub(r'\(.*?\)', '', cell_value).strip()
-            # If cell value does not match any of the selected subjects, blank it out
-            if not any(sub in cell_value for sub in selected_subjects):
-                timetable.at[index, col] = ""
-    return timetable
+            # Split by '/' to handle multiple subjects
+            subjects = [sub.strip() for sub in cell_value.split('/')]
 
-def generate_timetable(uploaded_file, enrollment_no):
-    # Load the timetable Excel file
-    sheets = pd.read_excel(uploaded_file, sheet_name=None)
-    timetable_df = sheets.get("MBA 2023-25_3RD SEMESTER")
+            if not any(sub in selected_abbreviations for sub in subjects):
+                filtered_timetable.at[index, col] = ""
 
-    if timetable_df is not None:
-        # Check if the enrollment number exists in the profiles
-        if enrollment_no in st.session_state["profiles"]:
-            profile = st.session_state["profiles"][enrollment_no]
-            selected_section = profile["section"]
-            selected_abbreviations = [
-                sub.split('(')[-1].replace(')', '').strip() for sub in [
-                    profile["elective_1"], profile["elective_2"]] +
-                    major_sectors[profile["major_sector"]] + [profile["additional_subject"]]
-            ]
-
-            # Filter the timetable based on the selected section and subjects
-            filtered_timetable = timetable_df[timetable_df['Section'] == selected_section]
-
-            if not filtered_timetable.empty:
-                personal_timetable = filter_and_blank_timetable_by_subjects(filtered_timetable, selected_abbreviations)
-                return personal_timetable
-            else:
-                st.warning(f"No timetable found for Section {selected_section}.")
-        else:
-            st.warning("Profile not found for this enrollment number.")
-    else:
-        st.error("The timetable sheet is missing or incorrectly named.")
+    return filtered_timetable
 
 def main():
     st.title("Personal Timetable Generator")
 
+    # Upload timetable file
     uploaded_file = st.file_uploader("Upload your timetable Excel file", type=["xlsx"])
 
-    if uploaded_file:
-        st.subheader("Enter Your Enrollment Number")
-        enrollment_no = st.text_input("Enrollment Number")
-
-        if st.button("Generate Timetable") and enrollment_no:
-            personal_timetable = generate_timetable(uploaded_file, enrollment_no)
-
-            if personal_timetable is not None:
-                st.subheader("Your Personal Timetable")
-                st.dataframe(personal_timetable)
-        else:
-            st.info("Please enter your enrollment number.")
-    else:
-        st.info("Please upload a timetable file.")
-
-    st.sidebar.title("Navigation")
+    # Create or Edit Profile
+    st.sidebar.title("Profile Management")
     pages = st.sidebar.radio("Go to", ["Create Profile", "Edit/Delete Profile"])
 
     if pages == "Create Profile":
@@ -159,6 +143,16 @@ def main():
 
         else:
             st.info("No profile found for this enrollment number.")
+
+    if uploaded_file:
+        student_id = st.text_input("Enter your enrollment number to generate timetable")
+        if student_id:
+            personal_timetable = generate_timetable(uploaded_file, student_id)
+            if personal_timetable is not None:
+                st.subheader("Your Personal Timetable")
+                st.dataframe(personal_timetable)
+        else:
+            st.info("Please enter an enrollment number.")
 
 if __name__ == "__main__":
     main()
