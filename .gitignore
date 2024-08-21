@@ -1,19 +1,11 @@
-# Python-related files
+# Python
 *.pyc
 __pycache__/
 
-# Environment files
+# Environment
 .env
-.venv/
 venv/
-env/
-ENV/
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints
+.venv/
 
-# macOS-specific files
-.DS_Store
-
-# Streamlit cache and secrets
-.streamlit/secrets.toml
-.streamlit/config.toml
+# Streamlit
+.streamlit/
