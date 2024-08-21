@@ -30,111 +30,145 @@ additional_subjects = [
 if "profiles" not in st.session_state:
     st.session_state["profiles"] = {}
 
-def create_profile():
-    st.title("Create Profile")
-    name = st.text_input("Enter your name")
-    enrollment_no = st.text_input("Enter your enrollment number")
-    section = st.selectbox("Select your section", ["A", "B", "C"])
+def filter_and_blank_timetable_by_subjects(timetable, selected_subjects):
+    for index, row in timetable.iterrows():
+        for col in timetable.columns[1:]:  # Skip the first column (time slot)
+            cell_value = str(row[col]).strip()
 
-    st.subheader("Compulsory Subjects")
-    for subject in compulsory_subjects:
-        st.checkbox(subject, value=True, disabled=True)
+            # Remove content within brackets and the brackets themselves
+            cell_value = re.sub(r'\(.*?\)', '', cell_value).strip()
 
-    st.subheader("General Electives 1")
-    elective_1 = st.selectbox("Choose one", general_electives_1)
+            # Identify subjects separated by '/'
+            subjects_in_cell = [sub.strip() for sub in cell_value.split('/')]
 
-    st.subheader("General Electives 2")
-    elective_2 = st.selectbox("Choose one", general_electives_2)
+            # If cell value does not match any of the selected subjects, blank it out
+            if not any(sub in subjects_in_cell for sub in selected_subjects):
+                timetable.at[index, col] = ""
 
-    st.subheader("Major Sector")
-    major_sector = st.selectbox("Choose a sector", list(major_sectors.keys()))
-    for subject in major_sectors[major_sector]:
-        st.checkbox(subject, value=True, disabled=True)
+    return timetable
 
-    st.subheader("Additional Subject")
-    additional_subject = st.selectbox("Choose one", additional_subjects)
+def generate_timetable(timetable_file, selected_section, selected_subjects):
+    # Load the timetable from the uploaded Excel file
+    timetable_df = pd.read_excel(timetable_file, sheet_name="MBA 2023-25_3RD SEMESTER")
 
-    if st.button("Save Profile"):
-        st.session_state["profiles"][enrollment_no] = {
-            "name": name,
-            "section": section,
-            "elective_1": elective_1,
-            "elective_2": elective_2,
-            "major_sector": major_sector,
-            "additional_subject": additional_subject
-        }
-        st.success("Profile saved successfully!")
+    # Filter timetable based on section and subjects
+    filtered_timetable = timetable_df[timetable_df['Section'] == selected_section]
 
-def edit_delete_profile():
-    st.title("Edit or Delete Profile")
-    enrollment_no = st.text_input("Enter your enrollment number to search")
+    # Apply subject filtering
+    filtered_timetable = filter_and_blank_timetable_by_subjects(filtered_timetable, selected_subjects)
 
-    if enrollment_no in st.session_state["profiles"]:
-        profile = st.session_state["profiles"][enrollment_no]
-        st.write(f"Name: {profile['name']}")
-        st.write(f"Section: {profile['section']}")
-        st.write(f"Elective 1: {profile['elective_1']}")
-        st.write(f"Elective 2: {profile['elective_2']}")
-        st.write(f"Major Sector: {profile['major_sector']}")
-        st.write(f"Additional Subject: {profile['additional_subject']}")
-
-        if st.button("Delete Profile"):
-            del st.session_state["profiles"][enrollment_no]
-            st.success("Profile deleted successfully!")
-
-        if st.button("Edit Profile"):
-            st.session_state["profiles"][enrollment_no] = {
-                "name": st.text_input("Enter your name", value=profile['name']),
-                "section": st.selectbox("Select your section", ["A", "B", "C"], index=["A", "B", "C"].index(profile['section'])),
-                "elective_1": st.selectbox("Choose one", general_electives_1, index=general_electives_1.index(profile['elective_1'])),
-                "elective_2": st.selectbox("Choose one", general_electives_2, index=general_electives_2.index(profile['elective_2'])),
-                "major_sector": st.selectbox("Choose a sector", list(major_sectors.keys()), index=list(major_sectors.keys()).index(profile['major_sector'])),
-                "additional_subject": st.selectbox("Choose one", additional_subjects, index=additional_subjects.index(profile['additional_subject']))
-            }
-            st.success("Profile edited successfully!")
-
-    else:
-        st.info("No profile found for this enrollment number.")
-
-def generate_timetable():
-    st.title("Generate Timetable")
-    enrollment_no = st.text_input("Enter your enrollment number")
-
-    if enrollment_no in st.session_state["profiles"]:
-        profile = st.session_state["profiles"][enrollment_no]
-        st.write(f"Generating timetable for {profile['name']}...")
-
-        # Load the timetable from an Excel file or other source
-        timetable_df = pd.read_excel("path_to_your_timetable_file.xlsx", sheet_name="MBA 2023-25_3RD SEMESTER")
-
-        # Filter timetable based on section and subjects
-        filtered_timetable = timetable_df[
-            (timetable_df['Section'] == profile['section']) &
-            (timetable_df['Subject'].isin([
-                profile['elective_1'],
-                profile['elective_2'],
-                *major_sectors[profile['major_sector']],
-                profile['additional_subject']
-            ]))
-        ]
-
-        st.dataframe(filtered_timetable)
-
-    else:
-        st.info("No profile found for this enrollment number.")
+    return filtered_timetable
 
 def main():
+    st.title("Timetable and Profile Management")
+
+    # Sidebar for navigation
     st.sidebar.title("Navigation")
-    pages = st.sidebar.radio("Go to", ["Create Profile", "Edit/Delete Profile", "Generate Timetable"])
+    pages = st.sidebar.radio("Go to", ["Create/Edit Profile", "Generate Timetable"])
 
-    if pages == "Create Profile":
-        create_profile()
+    if pages == "Create/Edit Profile":
+        st.subheader("Create or Edit Profile")
+        action = st.radio("Choose action", ["Create Profile", "Edit/Delete Profile"])
 
-    elif pages == "Edit/Delete Profile":
-        edit_delete_profile()
+        if action == "Create Profile":
+            st.write("Fill in the details to create a new profile:")
+            name = st.text_input("Enter your name")
+            enrollment_no = st.text_input("Enter your enrollment number")
+            section = st.selectbox("Select your section", ["A", "B", "C"])
+
+            st.subheader("Compulsory Subjects")
+            for subject in compulsory_subjects:
+                st.checkbox(subject, value=True, disabled=True)
+
+            st.subheader("General Electives 1")
+            elective_1 = st.selectbox("Choose one", general_electives_1)
+
+            st.subheader("General Electives 2")
+            elective_2 = st.selectbox("Choose one", general_electives_2)
+
+            st.subheader("Major Sector")
+            major_sector = st.selectbox("Choose a sector", list(major_sectors.keys()))
+            for subject in major_sectors[major_sector]:
+                st.checkbox(subject, value=True, disabled=True)
+
+            st.subheader("Additional Subject")
+            additional_subject = st.selectbox("Choose one", additional_subjects)
+
+            if st.button("Save Profile"):
+                st.session_state["profiles"][enrollment_no] = {
+                    "name": name,
+                    "section": section,
+                    "elective_1": elective_1,
+                    "elective_2": elective_2,
+                    "major_sector": major_sector,
+                    "additional_subject": additional_subject
+                }
+                st.success("Profile saved successfully!")
+
+        elif action == "Edit/Delete Profile":
+            st.write("Enter the enrollment number to search for a profile:")
+            enrollment_no = st.text_input("Enter your enrollment number to search")
+
+            if enrollment_no in st.session_state["profiles"]:
+                profile = st.session_state["profiles"][enrollment_no]
+                st.write(f"Name: {profile['name']}")
+                st.write(f"Section: {profile['section']}")
+                st.write(f"Elective 1: {profile['elective_1']}")
+                st.write(f"Elective 2: {profile['elective_2']}")
+                st.write(f"Major Sector: {profile['major_sector']}")
+                st.write(f"Additional Subject: {profile['additional_subject']}")
+
+                if st.button("Delete Profile"):
+                    del st.session_state["profiles"][enrollment_no]
+                    st.success("Profile deleted successfully!")
+
+                if st.button("Edit Profile"):
+                    st.session_state["profiles"][enrollment_no] = {
+                        "name": st.text_input("Enter your name", value=profile['name']),
+                        "section": st.selectbox("Select your section", ["A", "B", "C"], index=["A", "B", "C"].index(profile['section'])),
+                        "elective_1": st.selectbox("Choose one", general_electives_1, index=general_electives_1.index(profile['elective_1'])),
+                        "elective_2": st.selectbox("Choose one", general_electives_2, index=general_electives_2.index(profile['elective_2'])),
+                        "major_sector": st.selectbox("Choose a sector", list(major_sectors.keys()), index=list(major_sectors.keys()).index(profile['major_sector'])),
+                        "additional_subject": st.selectbox("Choose one", additional_subjects, index=additional_subjects.index(profile['additional_subject']))
+                    }
+                    st.success("Profile edited successfully!")
+
+            else:
+                st.info("No profile found for this enrollment number.")
 
     elif pages == "Generate Timetable":
-        generate_timetable()
+        st.subheader("Generate Your Timetable")
+        uploaded_file = st.file_uploader("Upload your timetable Excel file", type=["xlsx"])
+
+        if uploaded_file:
+            selected_section = st.selectbox("Select your Section", ["A", "B", "C"])
+
+            if selected_section:
+                st.subheader("Select Your Subjects")
+                # Combine course title and abbreviation for selection
+                subjects = [sub for sub in compulsory_subjects] + \
+                           [sub for sub in general_electives_1] + \
+                           [sub for sub in general_electives_2] + \
+                           [sub for sub in major_sectors["Sales and Marketing"]] + \
+                           [sub for sub in major_sectors["Finance"]] + \
+                           [sub for sub in major_sectors["Business Analytics and Operations"]] + \
+                           [sub for sub in major_sectors["Media"]] + \
+                           [sub for sub in major_sectors["HR"]] + \
+                           [sub for sub in major_sectors["Logistics & Supply Chain"]] + \
+                           [sub for sub in additional_subjects]
+
+                selected_subjects = st.multiselect("Subjects", subjects)
+
+                if selected_subjects:
+                    # Extract just the abbreviations to filter the timetable
+                    selected_abbreviations = [sub.split('(')[-1].replace(')', '').strip() for sub in selected_subjects]
+
+                    # Generate and display the filtered timetable
+                    personal_timetable = generate_timetable(uploaded_file, selected_section, selected_abbreviations)
+                    st.subheader("Your Personal Timetable")
+                    st.dataframe(personal_timetable)
+        else:
+            st.info("Please upload a timetable file.")
 
 if __name__ == "__main__":
     main()
